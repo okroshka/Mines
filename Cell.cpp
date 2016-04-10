@@ -2,15 +2,18 @@
 
 #include "Field.hpp"
 
-Cell::Cell(Field *field, int x, int y)
-{
-    m_field = field;
 
+
+Cell::Cell(int x, int y):QObject()
+{
     m_x = x;
     m_y = y;
 
     m_haveMine = false;
     m_open = false;
+    m_mark = MarkNothing;
+    m_marked = false;
+    emit markChanged(m_mark);
 }
 
 int Cell::minesAround() const
@@ -32,35 +35,77 @@ void Cell::setHaveMine(bool haveMine)
 
 void Cell::open()
 {
-    if (m_open) {
+    if (m_open)
+    {
         return;
     }
-
     m_open = true;
 
-    if (minesAround() == 0) {
-        for (Cell *cell : getNeighbors()) {
+    emit opened(x(), y());
+
+    if (minesAround() == 0)
+    {
+        for (Cell *cell : getNeighbors())
+        {
             cell->open();
+        }
+    }
+
+}
+
+void Cell::reset()
+{
+    m_open = false;
+    m_haveMine = false;
+    m_mark = MarkNothing;
+    emit markChanged(m_mark);
+}
+
+void Cell::toggleMark()
+{
+    switch (m_mark)
+    {
+        case MarkNothing:
+            m_mark = MarkFlagged;
+            m_marked = true;
+            break;
+        case MarkFlagged:
+            m_mark = MarkQuestioned;
+            m_marked = false;
+           break;
+        case MarkQuestioned:
+            m_mark = MarkNothing;
+            break;
+    }
+    emit markChanged(m_mark);
+}
+
+void Cell::tryToOpenAround()
+{
+    int excl = 0;
+    int mines = minesAround();
+
+    for (Cell *cell : getNeighbors()) // тут ищем поля по вектору, где стоят воскл.знаки
+    {
+        if (cell->mark() == MarkFlagged)
+        {
+            ++excl;
+        }
+    }
+
+    if (mines == excl) // сравниваем значения
+    {
+        for (Cell *cell : getNeighbors())
+        {
+            if (cell->mark() != MarkFlagged) // если на поле отметка НЕ воскл.знак
+            {
+                cell->open(); // открываем
+            }
         }
     }
 }
 
-void maybeAddCell(QVector<Cell*> *vector, Cell *cell)
+void Cell::setNeighbors(const QVector<Cell *> &neighbors)
 {
-    if (cell) {
-        vector->append(cell);
-    }
-}
-
-QVector<Cell *> Cell::getNeighbors() const
-{
-    QVector<Cell*> neighbors;
-    for (int x = m_x - 1; x <= m_x + 1; ++x) {
-        maybeAddCell(&neighbors, m_field->cellAt(x, m_y - 1));
-        maybeAddCell(&neighbors, m_field->cellAt(x, m_y + 1));
-    }
-    maybeAddCell(&neighbors, m_field->cellAt(m_x - 1, m_y));
-    maybeAddCell(&neighbors, m_field->cellAt(m_x + 1, m_y));
-
-    return neighbors;
+    m_neighbors = neighbors;
 }
